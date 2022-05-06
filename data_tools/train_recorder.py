@@ -14,14 +14,22 @@ names = os.listdir('./train_data')
 X,y=[],[]
 for dir in names:
     data=pd.read_csv('./train_data/'+dir)
-    X.append(data.values[1:])
+    data=data.values[1:]
+    temp_X=np.zeros((10,6))
+    i=0
+    while data[i][0]==0 and data[i][2]==0 and data[i][4]==0 and i<len(data)-1:
+        i+=1
+    # print(i)
+    for j in range(min(len(temp_X),len(data)-i)):
+        temp_X[j]=(data[i+j])
+    X.append(temp_X)
     dir=dir.split('.csv')[0]
     label=re.split('\d+$',dir)[0]
     y.append(activity[label])
 # y = np_utils.to_categorical(y,num_classes= 5)
-X= np.array(X, dtype = float).reshape(len(names),90,6,1)
+X= np.array(X, dtype = float).reshape(len(names),10,6,1)
 y= np.array(y,dtype=int)
-
+# print(X)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1)
 
 
@@ -30,7 +38,7 @@ print('y_train.shape:',y_train.shape)
 
 model = keras.Sequential()
 # 第一层卷积，卷积核数为128，卷积核3x3，激活函数使用relu，输入是每张原始图片64x64*1
-model.add(keras.layers.Conv2D(128, kernel_size=3, activation='relu', input_shape=(90, 6, 1)))
+model.add(keras.layers.Conv2D(128, kernel_size=3, activation='relu', input_shape=(10, 6, 1)))
 # 第一池化层
 model.add(keras.layers.MaxPool2D((2, 2), strides=2))
 
