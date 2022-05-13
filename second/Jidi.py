@@ -69,7 +69,7 @@ class Jidi(Agent):
             while type(agent)!=agent_list[category]:
                 agent=choice(self.subordinate) #只选择一个agent抵近
             agent.receive(target_loc,target_activity)
-            # print(str(agent.category),"receive the deployment of", target_activity)
+            print(str(agent.category),"receive the deployment of", target_activity)
             # return
         elif target_activity=='yanxi':
             for agent in self.subordinate:

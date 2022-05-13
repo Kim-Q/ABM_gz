@@ -8,7 +8,8 @@ from data_tools.cal_distance import *
 from datetime import datetime
 
 agent_list=[Jidi]
-activity=['guohang','dijin','zhencha','yanxi','xunlian']
+activity_A=['guohang','dijin','zhencha','yanxi','xunlian']
+activity_C=['ignore','dijin','ganrao','quzhu']
 
 
 class Commander(Agent):
@@ -30,6 +31,7 @@ class Commander(Agent):
         self.urgency=[]
         if self.standpoint==-1:
             appointment=choice(activity)
+            # appointment='zhencha'
             self.activity.append(appointment)
             self.target_activity.append(appointment)
             if appointment=='xunlian':
@@ -37,7 +39,7 @@ class Commander(Agent):
                 self.target_loc=[1,2]
             else:
                 self.target_loc.append((choice([1,2])))
-            # print(self.target_activity,self.target_loc)
+            print(self.target_activity,self.target_loc)
 
         for i in range(len(arg)):
             agent=Jidi(uuid.uuid1(),self.model,self,arg[i][0],self.standpoint,arg[i][1])
@@ -69,7 +71,7 @@ class Commander(Agent):
             temp=[0,0,0,0,0,0] 
             for node in self.urgency:
                 loc=self.model.graph.nodes.data()[node]['Lon_Lat']
-                print(len(self.model.graph.nodes.data()[node]['agent_list']))
+                # print(len(self.model.graph.nodes.data()[node]['agent_list']))
                 for agent in self.model.graph.nodes.data()[node]['agent_list']:
                     if agent.standpoint==-self.standpoint and agent.category=='aircraft':
                         temp[0]+=1

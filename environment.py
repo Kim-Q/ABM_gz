@@ -5,6 +5,7 @@ import time
 import json
 from commander.Commander import *
 from data_tools.cal_distance import *
+import networkx as nx
 
 class Environment(Model):
     def __init__(self, graph, arg):
@@ -75,10 +76,11 @@ class Environment(Model):
 #     G=nx.read_gpickle(r"./input/Dongsha_withstandpoint.gpickle")
 #     with open('./input/agent_setting.json','r',encoding='utf8')as fp:
 #         arg = json.load(fp)
-#     for i in range(100):
+#     for i in range(1):
 #         test=Environment(G, arg)
-#         for _ in range(90):
-#           test.step()
+#         for j in range(60):
+#             # print("round",j)
+#             test.step()
 #         agent_data=test.datacollector.get_agent_vars_dataframe()
 #         print(agent_data)
         # agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)

@@ -42,7 +42,7 @@ class StatusElement(TextElement):
         if len(model_data)==1:
             self.label=activity_key[model_data.iloc[-1]['activity'][0]]
             self.round+=1
-        if len(model_data)==91:
+        if len(model_data)==11:
             agent_data=model.datacollector.get_agent_vars_dataframe()
             agent_data.to_csv(app_path()+'/simu_recorder/show_trace{}.csv'.format(self.round),index=False)
             model_data.iloc[:,:6].to_csv(app_path()+'/dete_recorder/{}{}.csv'.format(str(model_data.iloc[-1]['activity'][0]),self.round),index=False)
@@ -61,13 +61,13 @@ class PredictElement(TextElement):
 
     def render(self, model):
         model_data=model.datacollector.get_model_vars_dataframe()
-        if len(model_data)==92:
+        if len(model_data)==12:
             self.round+=1
             names = os.listdir(app_path()+'/dete_recorder')
             self.model = models.load_model('ABM_model.h5')
             dir=list(set(names)-set(self.names))[0]
             data=pd.read_csv(app_path()+'/dete_recorder/'+dir)
-            X= np.array(data.values[1:], dtype = float).reshape(1,90,6,1)
+            X= np.array(data.values[1:], dtype = float).reshape(1,10,6,1)
             y_predict = self.model.predict(X)
             self.label=self.activity_key[np.argmax(y_predict)]
             self.names=names
