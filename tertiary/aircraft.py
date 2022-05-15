@@ -26,6 +26,7 @@ class Aircraft(Agent):
         self.clock=self.time
         self.wait=0
         self.status=-1 #-1表示待命，0表示返航，1表示过航，2表示抵近，3表示侦查，4表示演习，5表示训练，6表示干扰，7表示驱逐
+        self.warning=False
         self.target_loc=[]
         self.target_loc.append(loc)
         self.target_activity=[]
@@ -64,6 +65,7 @@ class Aircraft(Agent):
         if self.wait>0:
             self.wait-=1
         else:
+            self.leader.feedback(True)
             self.status=-1
             if len(self.target_loc)>1:
                 self.target_loc.pop(0)
@@ -71,9 +73,21 @@ class Aircraft(Agent):
                 self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
         return
 
+    def interrupt(self):
+        # 用来区别干扰是否有效
+        self.wait=0
+        self.status=-1
+        if len(self.target_loc)>1:
+            self.target_loc.pop(0)
+            self.target_activity.pop(0)
+            self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
+
     def step(self):
         self.timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if self.status==-1 and self.target_activity[0]=="fancheng":
+            return
+        elif self.warning:
+            self.interrupt()
             return
         elif self.towards()!=self.status:
             self.work()

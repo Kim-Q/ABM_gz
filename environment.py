@@ -6,12 +6,14 @@ import json
 from commander.Commander import *
 from data_tools.cal_distance import *
 import networkx as nx
+from keras import models
 
 class Environment(Model):
     def __init__(self, graph, arg):
         
         self.graph=graph
         self.arg=arg
+        self.cnn_model=models.load_model('ABM_model.h5')
 
         self.commander=dict()
         self.description="This is a ABM1.0 demo with 100 training dataset."
@@ -51,13 +53,15 @@ class Environment(Model):
     
     def check_nodes(self):
         for i in [1,2]:
-            self.graph.nodes.data()[i]['agent_list']=[]
+            self.graph.nodes.data()[i]['agent_list']={1:[],-1:[]}
             for agent in self.schedule.agents:
                 if cal_distance(self.graph.nodes.data()[i]['Lon_Lat'],(agent.x, agent.y))<22000:
-                    self.graph.nodes.data()[i]['agent_list'].append(agent)
+                    self.graph.nodes.data()[i]['agent_list'][agent.standpoint].append(agent)
                     if agent.standpoint==-self.graph.nodes.data()[i]['standpoint']:
-                        # print("Warning!",str(self.graph.nodes.data()[i]['name']),"has an opposite approaching.")
                         self.commander[self.graph.nodes.data()[i]['standpoint']].warning(i)
+            if len(self.graph.nodes.data()[i]['agent_list'][-1])<len(self.graph.nodes.data()[i]['agent_list'][1]):
+                for agent in self.graph.nodes.data()[i]['agent_list'][-1]:
+                    agent.warning=True
 
     def step(self):
         time.sleep(1)
@@ -72,16 +76,18 @@ class Environment(Model):
         return model.commander[-1].activity
 
 
-# if __name__=="__main__":
-#     G=nx.read_gpickle(r"./input/Dongsha_withstandpoint.gpickle")
-#     with open('./input/agent_setting.json','r',encoding='utf8')as fp:
-#         arg = json.load(fp)
-#     for i in range(1):
-#         test=Environment(G, arg)
-#         for j in range(60):
-#             # print("round",j)
-#             test.step()
-#         agent_data=test.datacollector.get_agent_vars_dataframe()
-#         print(agent_data)
+if __name__=="__main__":
+    G=nx.read_gpickle(r"./input/Dongsha_withstandpoint.gpickle")
+    with open('./input/agent_setting.json','r',encoding='utf8')as fp:
+        arg = json.load(fp)
+    for i in range(1):
+        test=Environment(G, arg)
+        for j in range(60):
+            # print("round",j)
+            test.step()
+        # 结束后通过score_1-score_-1得到我方行动的结果
+        print(test.commander[1].recording)
+        # agent_data=test.datacollector.get_agent_vars_dataframe()
+        # print(agent_data)
         # agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)
         # test.commander[1].recording.to_csv('./dete_recorder/{}{}.csv'.format(str(test.commander[-1].activity[0]),i),index=False)
