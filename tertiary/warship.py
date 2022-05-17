@@ -23,8 +23,11 @@ class Warship(Agent):
         # 行为体特征，参数可修改
         self.speed=30000
         self.time=time.time()
+        self.wait=0
         self.clock=self.time
         self.status=-1 #-1表示待命，0表示返航，1表示过航，2表示抵近，3表示侦查，4表示演习，5表示训练，6表示干扰，7表示驱逐
+        self.warning=False
+
         self.target_loc=[]
         self.target_loc.append(loc)
         self.target_activity=[]
@@ -36,10 +39,12 @@ class Warship(Agent):
         if self.status>0:
             self.target_loc.insert(0,target_loc)
             self.target_activity.insert(0,target_activity)
-            if self.status==2:
+            if self.status==1:
+                self.wait=0
+            elif self.status==2:
                 self.wait=random.randint(1,10)
             elif self.status>2 and self.status<6:
-                self.wait=random.randint(1,3)
+                self.wait=random.randint(1,30)
         target_loc=self.model.graph.nodes.data()[target_loc]['Lon_Lat']
         length=cal_distance((self.x,self.y),target_loc)
         self.time=time.time()
@@ -61,24 +66,45 @@ class Warship(Agent):
             return self.status
     
     def work(self):
-        if self.wait>0:
-            self.wait-=1
-        else:
+        if self.warning:
+            print("task has been interrupted")
+            self.leader.feedback(self,False)
             self.status=-1
             if len(self.target_loc)>1:
                 self.target_loc.pop(0)
                 self.target_activity.pop(0)
                 self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
-        return
+            return
+        if self.wait>0:
+            self.wait-=1
+        else:
+            self.leader.feedback(self,True)
+            self.status=-1
+            if len(self.target_loc)>1:
+                self.target_loc.pop(0)
+                self.target_activity.pop(0)
+                self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
 
     def step(self):
         self.timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if self.status==-1 and self.target_activity[0]=="fancheng":
             return
         elif self.towards()!=self.status:
-            self.work()
-            # print(self.status,self.wait)
-            return
-        elif self.status==self.towards():
+            # print(self.warning,self.standpoint)
+            if self.standpoint==-1:
+                self.work()
+                return
+            else:
+                if self.warning:
+                    return
+                else:
+                    self.status=-1
+                    if len(self.target_loc)>1:
+                        self.target_loc.pop(0)
+                        self.target_activity.pop(0)
+                        self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
+                    return
+        elif self.towards()==self.status:
+            # print(self.warning,self.standpoint)
             # print(self.x, self.y)
             return

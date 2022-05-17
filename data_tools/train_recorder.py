@@ -11,9 +11,13 @@ warnings.filterwarnings("ignore")
 activity={'guohang':0,'dijin':1,'zhencha':2,'yanxi':3,'xunlian':4}
 
 names = os.listdir('./train_data')
+print(len(names))
 X,y=[],[]
 for dir in names:
     data=pd.read_csv('./train_data/'+dir)
+    dir=dir.split('.csv')[0]
+    label=re.split('\d+$',dir)[0]
+
     data=data.values[1:]
     temp_X=np.zeros((10,6))
     i=0
@@ -23,8 +27,7 @@ for dir in names:
     for j in range(min(len(temp_X),len(data)-i)):
         temp_X[j]=(data[i+j])
     X.append(temp_X)
-    dir=dir.split('.csv')[0]
-    label=re.split('\d+$',dir)[0]
+
     y.append(activity[label])
 # y = np_utils.to_categorical(y,num_classes= 5)
 X= np.array(X, dtype = float).reshape(len(names),10,6,1)

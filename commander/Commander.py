@@ -10,7 +10,7 @@ from keras import models
 
 agent_list=[Jidi]
 activity_A=['guohang','dijin','zhencha','yanxi','xunlian']
-activity_C=['ignore','dijin','ganrao','quzhu']
+activity_C=['ignore','ganrao','quzhu']
 
 # 行动成功所获奖励分数
 activity_score={'guohang':1,'dijin':4,'zhencha':4,'yanxi':10,'xunlian':20}
@@ -21,6 +21,7 @@ class Commander(Agent):
         self.subordinate=[]
         self.standpoint=standpoint
         self.activity=None
+        self.result=False
         self.x,self.y=0,0
         # print("I'm an initial commander",str(self.unique_id),"with standpoint", str(self.standpoint),"I have",str(len(arg)),"basements.")
         self.category="commander"
@@ -38,7 +39,7 @@ class Commander(Agent):
         self.target_activity=[]
         self.urgency=None
         if self.standpoint==-1:
-            self.activity=choice(activity_A[2:])
+            self.activity=choice(activity_A)
             self.target_activity.append(self.activity)
             if self.activity=='xunlian':
                 self.target_activity.append(self.activity)
@@ -86,7 +87,9 @@ class Commander(Agent):
             #     agent.deploy(self.target_loc,self.target_activity)
 
     def feedback(self,result):
-        if result:
+        if result and self.standpoint==-1:
+            self.result=True
+            # print(self.standpoint,self.activity)
             self.model.commander[1].score-=activity_score[self.activity]
     
     def step(self):
@@ -97,7 +100,7 @@ class Commander(Agent):
                     self.subordinate[i].deploy(self.target_loc.pop(),self.target_activity.pop())
             return
 
-        if self.standpoint==1 and self.urgency!=None and len(self.recording)<11: 
+        if self.standpoint==1 and self.urgency!=None: 
             loc=self.model.graph.nodes.data()[self.urgency]['Lon_Lat']
             if len(self.model.graph.nodes.data()[self.urgency]['agent_list'][-1])>0:
                 temp=[0,0,0,0,0,0]
@@ -115,18 +118,28 @@ class Commander(Agent):
                         temp[5]=float('inf') if temp[5]==0 else temp[5]
                         temp[5]=cal_distance((agent.x,agent.y),loc) if cal_distance((agent.x,agent.y),loc)<temp[5] else temp[5]
                 self.recording.loc[len(self.recording.index)]=temp
-            else:
-                self.recording.loc[len(self.recording.index)]=[0,0,0,0,0,0] 
-            return
+            # 判断当前的recording能否做预测
+            i=0
+            while self.recording.iloc[i][0]==0 and self.recording.iloc[i][2]==0 and self.recording.iloc[i][4]==0:
+                i+=1
+            if self.strategy==None and i<90-10 and len(self.recording)>=i+10 :
+                X=np.zeros((10,6))
+                for j in range(10):
+                    X[j]=(self.recording.iloc[i+j])
+                X= np.array(X, dtype = float).reshape(1,10,6,1)
+                y_predict = self.model.cnn_model.predict(X)
+                self.predict=np.argmax(y_predict)
+                print("We have predict the oppose task is :", activity_A[self.predict])
+                # self.strategy=random.randint(0,len(activity_C)-1) 
+                # 'guohang','dijin','zhencha','yanxi','xunlian'/'ignore','ganrao','quzhu'
+                self.strategy=0 if self.predict==0 else 1 if (self.predict==1 or self.predict==2) else 2
+                print("C takes the strategy of ",activity_C[self.strategy])
+                if self.strategy!=0:
+                    arrangement=self.subordinate[0].deploy(self.urgency,activity_C[self.strategy])
+                    print(arrangement)            
+            self.urgency=None
 
-        elif self.standpoint==1 and self.urgency!=None and len(self.recording)==11 and self.strategy==None:
-            X= np.array(self.recording.values[1:], dtype = float).reshape(1,10,6,1)
-            y_predict = self.model.cnn_model.predict(X)
-            self.predict=np.argmax(y_predict)
-            print("We have predict the oppose task is :", activity_A[self.predict])
-            self.strategy=random.randint(0,len(activity_C)-1)
-            print("C takes the strategy of ",activity_C[self.strategy])
-            if self.strategy!=0:
-                arrangement=self.subordinate[0].deploy(self.urgency,activity_C[self.strategy])
-                print(arrangement)            
+        elif self.standpoint==1 and self.urgency==None:
+            self.recording.loc[len(self.recording.index)]=[0,0,0,0,0,0] 
+
 

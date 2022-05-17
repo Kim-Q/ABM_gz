@@ -1,3 +1,4 @@
+from copy import copy
 import numpy as np
 import pandas as pd
 from mesa import Agent
@@ -9,11 +10,12 @@ from tertiary.warship import *
 from tertiary.aircraft import *
 from datetime import datetime
 import itertools
+import copy
 
 
 agent_list=[Carrier, Warship, Aircraft]
 activity_A=['guohang','dijin','zhencha','yanxi','xunlian']
-activity_C=['ignore','dijin','ganrao','quzhu']
+activity_C=['ignore','ganrao','quzhu']
 
 class Jidi(Agent):
     def __init__(self,unique_id,model,leader,loc,standpoint,arg:dict):
@@ -25,12 +27,12 @@ class Jidi(Agent):
         self.standpoint=standpoint
         self.category="basement"
         self.time=time.time()
-        self.activity=[]
+        self.arranged_agents=[]
         self.timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # self.zhencha=[]
         self.target_loc=[]
         self.target_activity=[]
+        self.activity=None
 
         # print("I'm an secondary agent",str(self.unique_id),"with standpoint", str(self.standpoint), "and locate in", str(self.model.graph.nodes.data()[loc]['name']),". I have",str(sum(arg.values())),"subordinates.")
         for key, value in arg.items(): # {0:1,1:2} key代表agent的类型如agent_list, value代表该类型的数量
@@ -62,7 +64,7 @@ class Jidi(Agent):
 
     def deploy(self,target_loc,target_activity):
         if self.standpoint==-1:
-            self.activity.append(target_activity)
+            self.activity=target_activity
             if target_activity=='guohang':
                 p = np.array([0.2, 0.3, 0.5])
             elif target_activity=='dijin':
@@ -70,21 +72,28 @@ class Jidi(Agent):
             elif target_activity=='zhencha':
                 p = np.array([0.0, 0.1, 0.9])
 
+            # 如果是演习或训练，则参与的agent大于1
             if target_activity=='yanxi' or target_activity=='xunlian':
                 for agent in self.subordinate:
                     if random.random()<0.3:
                         agent.receive(target_loc,target_activity)
+                        self.arranged_agents.append(agent)  #派遣agent的list
                         print("an",agent.category,"has taken the task",target_activity,"to",target_loc)
                 return
             
+            # 过航、抵近和干扰直接进行即可
             category=np.random.choice([0, 1, 2], p = p.ravel())
             agent=choice(self.subordinate)
             while type(agent)!=agent_list[category]:
-                agent=choice(self.subordinate) #只选择一个agent抵近
+                agent=choice(self.subordinate) #选择符合类型的agent
             if target_activity=='guohang':
                 agent.receive(random.randint(3,10),target_activity)
+                self.arranged_agents.append(agent)  #派遣agent的list
             else:
                 agent.receive(target_loc,target_activity)
+                self.arranged_agents.append(agent)  #派遣agent的list
+            for a in self.arranged_agents:
+                print(a.category,a.wait)
             return
 
         else:#standpoint==1
@@ -92,16 +101,22 @@ class Jidi(Agent):
             # temp=self.Q_score[self.Q_score['activity']==target_activity].sample(1)
             # arrangement=temp.iloc[0].values.tolist()[1:4]
             # 训练过程中用随机数生成
-            temp=arrangement=[random.randint(0,2),random.randint(0,4),random.randint(0,4)]
+            arrangement=[0,0,random.randint(1,4)] if target_activity=='ganrao' else [0,random.randint(1,4),random.randint(1,4)]
+            temp=copy.deepcopy(arrangement)
             for agent in self.subordinate:
                 if arrangement[agent_list.index(type(agent))]>0:
                     arrangement[agent_list.index(type(agent))]-=1
                     agent.receive(target_loc,target_activity)
             return temp
         
-    def feedback(self, result):
-        if result:
+    def feedback(self, agent, result):
+        if agent in self.arranged_agents and result:
+            self.arranged_agents.remove(agent)
+            print("task is completed from",agent.category)
+        if len(self.arranged_agents)==0 and self.activity!=None:
             self.leader.feedback(True)
+            
+            self.activity=None
 
     def step(self):
         pass

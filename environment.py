@@ -1,3 +1,4 @@
+from unicodedata import category
 from mesa import Model
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
@@ -55,13 +56,23 @@ class Environment(Model):
         for i in [1,2]:
             self.graph.nodes.data()[i]['agent_list']={1:[],-1:[]}
             for agent in self.schedule.agents:
-                if cal_distance(self.graph.nodes.data()[i]['Lon_Lat'],(agent.x, agent.y))<22000:
+                if agent.category!="basement" and agent.category!="commander" and cal_distance(self.graph.nodes.data()[i]['Lon_Lat'],(agent.x, agent.y))<42000:
                     self.graph.nodes.data()[i]['agent_list'][agent.standpoint].append(agent)
                     if agent.standpoint==-self.graph.nodes.data()[i]['standpoint']:
                         self.commander[self.graph.nodes.data()[i]['standpoint']].warning(i)
-            if len(self.graph.nodes.data()[i]['agent_list'][-1])<len(self.graph.nodes.data()[i]['agent_list'][1]):
+            # 当节点出现双方阵营时，判断各自的行为是否成功
+            # if len(self.graph.nodes.data()[i]['agent_list'][1])>0:
+                # print("node",i,"has conflict")
+                # # print(len(self.graph.nodes.data()[i]['agent_list'][-1]),len(self.graph.nodes.data()[i]['agent_list'][1]))
+            if 0<len(self.graph.nodes.data()[i]['agent_list'][-1])<=len(self.graph.nodes.data()[i]['agent_list'][1]):
                 for agent in self.graph.nodes.data()[i]['agent_list'][-1]:
+                    print(agent.category,"has been warned")
                     agent.warning=True
+                    # 这段有问题 一直不能示警 另外还要添加受干扰的标准
+            elif 0>len(self.graph.nodes.data()[i]['agent_list'][-1]):
+                for agent in self.graph.nodes.data()[i]['agent_list'][1]:
+                    # print(agent.category,"has been unwarned")
+                    agent.warning=False
 
     def step(self):
         time.sleep(1)
@@ -82,12 +93,14 @@ if __name__=="__main__":
         arg = json.load(fp)
     for i in range(1):
         test=Environment(G, arg)
-        for j in range(60):
-            # print("round",j)
+        for j in range(90):
+            print("round",j)
             test.step()
         # 结束后通过score_1-score_-1得到我方行动的结果
         print(test.commander[1].recording)
-        # agent_data=test.datacollector.get_agent_vars_dataframe()
+        print(test.commander[-1].activity,test.commander[-1].result)
+        agent_data=test.datacollector.get_agent_vars_dataframe()
+        model_data=test.datacollector.get_model_vars_dataframe()
         # print(agent_data)
-        # agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)
-        # test.commander[1].recording.to_csv('./dete_recorder/{}{}.csv'.format(str(test.commander[-1].activity[0]),i),index=False)
+        agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)
+        model_data.to_csv('./dete_recorder/{}{}.csv'.format(str(test.commander[-1].activity),i),index=False)

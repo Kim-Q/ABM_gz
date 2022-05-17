@@ -35,16 +35,23 @@ class Aircraft(Agent):
     def receive(self, target_loc, target_activity):
         self.status=activity.index(target_activity)-1
         if self.status>0:
+            # 如果非返航任务，将当前任务压入栈中，任务完成后返航
             self.target_loc.insert(0,target_loc)
             self.target_activity.insert(0,target_activity)
-            if self.status==2:
+            # 如果是抵近、侦查、演习或训练等任务，将wait一段时间后才算任务完成
+            if self.status==1:
+                self.wait=0
+            elif self.status==2:
                 self.wait=random.randint(1,10)
             elif self.status>2 and self.status<6:
-                self.wait=random.randint(1,3)
+                self.wait=random.randint(1,30)
+            elif self.status>5:
+                self.warning=True
         target_loc=self.model.graph.nodes.data()[target_loc]['Lon_Lat']
         length=cal_distance((self.x,self.y),target_loc)
         self.time=time.time()
         self.clock=self.time+length/self.speed
+        print("I'm an aircraft with standpoint",self.standpoint)
         self.cos, self.sin=(target_loc[0]-self.x)/length,(target_loc[1]-self.y)/length
 
     # 过航+返程，抵达返回状态，未抵达更新位置
@@ -62,37 +69,44 @@ class Aircraft(Agent):
             return self.status
     
     def work(self):
-        if self.wait>0:
-            self.wait-=1
-        else:
-            self.leader.feedback(True)
+        if self.warning:
+            print("task has been interrupted")
+            self.leader.feedback(self,False)
             self.status=-1
             if len(self.target_loc)>1:
                 self.target_loc.pop(0)
                 self.target_activity.pop(0)
                 self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
-        return
-
-    def interrupt(self):
-        # 用来区别干扰是否有效
-        self.wait=0
-        self.status=-1
-        if len(self.target_loc)>1:
-            self.target_loc.pop(0)
-            self.target_activity.pop(0)
-            self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
+            return
+        if self.wait>0:
+            self.wait-=1
+        else:
+            self.leader.feedback(self,True)
+            self.status=-1
+            if len(self.target_loc)>1:
+                self.target_loc.pop(0)
+                self.target_activity.pop(0)
+                self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
 
     def step(self):
         self.timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if self.status==-1 and self.target_activity[0]=="fancheng":
             return
-        elif self.warning:
-            self.interrupt()
-            return
         elif self.towards()!=self.status:
-            self.work()
-            # print(self.status,self.wait)
-            return
+            # 到达目的地后，-1如果未受到干扰则开始执行任务，受到干扰即从work跳转至返程；1开始干扰，如果干扰任务结束则返程
+            if self.standpoint==-1:
+                self.work()
+                return
+            else:
+                if self.warning:
+                    return
+                else:
+                    self.status=-1
+                    if len(self.target_loc)>1:
+                        self.target_loc.pop(0)
+                        self.target_activity.pop(0)
+                        self.receive(self.target_loc[0],self.target_activity[0]) #结束任务返程
+                    return
         elif self.towards()==self.status:
             # print(self.x, self.y)
             return
