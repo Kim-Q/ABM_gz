@@ -6,6 +6,7 @@ import uuid
 from second.Jidi import *
 from data_tools.cal_distance import *
 from datetime import datetime
+# import datedelta
 from keras import models
 
 agent_list=[Jidi]
@@ -39,26 +40,34 @@ class Commander(Agent):
         self.target_activity=[]
         self.urgency=None
         if self.standpoint==-1:
+            ###############################
             self.activity=choice(activity_A)
+            ###############################
             self.target_activity.append(self.activity)
             if self.activity=='xunlian':
                 self.target_activity.append(self.activity)
                 self.target_loc=[1,2]
             else:
                 self.target_loc.append((choice([1,2])))
-            print(self.target_activity,self.target_loc)
+            # print(self.target_activity,self.target_loc)
+            # print(str(self.target_activity[0]))
+            # print(str(self.model.graph.nodes.data()[self.target_loc[0]]['name']))
+            message="American plan to take the "+str(self.target_activity[0])+ " activity to "+ str(self.model.graph.nodes.data()[self.target_loc[0]]['name'])+'\n'
+            self.model.text+=message
+            print(self.model.text)
 
         for i in range(len(arg)):
             agent=Jidi(uuid.uuid1(),self.model,self,arg[i][0],self.standpoint,arg[i][1])
             self.subordinate.append(agent)
             self.model.schedule.add(agent)
 
-        self.score=0
+        # self.score=0
         self.Q_score=pd.DataFrame({'activity':[],'Carrier':[],'Warship':[],'Aircraft':[],'score':[]})
         self.Q_times=pd.DataFrame({'activity':[],'Carrier':[],'Warship':[],'Aircraft':[],'times':[]})
 
         if self.standpoint==1:
             ### 下面是生成矩阵的过程，训练过后再删
+            self.arrangement=[0,0,0]
             Cartesian=[activity_C[1:],range(2),range(4),range(4)]
             values=[d for d in itertools.product(*Cartesian)]
             for v in values:
@@ -77,20 +86,19 @@ class Commander(Agent):
         # standpoint=1阵营的功能
         if self.urgency!=node:
             self.urgency=node
-        # if node not in self.urgency:
-        #     self.urgency.append(node)
-            # self.activity=choice(activity_C)
-            # self.target_activity.append(self.activity)
-            # self.target_loc.append(node)
-            # print(self.target_loc,self.target_activity)
-            # for agent in self.subordinate:
-            #     agent.deploy(self.target_loc,self.target_activity)
 
-    def feedback(self,result):
-        if result and self.standpoint==-1:
+    def feedback(self):
+        if self.standpoint==-1:
             self.result=True
-            # print(self.standpoint,self.activity)
-            self.model.commander[1].score-=activity_score[self.activity]
+            for agent in self.subordinate:
+                if agent.result!=True or len(agent.arranged_agents)!=0:
+                    self.result=False
+            return [self.activity,self.result]
+        else:
+            if self.predict!=None:
+                return activity_A[self.predict]
+            else:
+                return 'undetected'
     
     def step(self):
         if self.standpoint==-1 and len(self.target_loc)>0:
@@ -129,14 +137,19 @@ class Commander(Agent):
                 X= np.array(X, dtype = float).reshape(1,10,6,1)
                 y_predict = self.model.cnn_model.predict(X)
                 self.predict=np.argmax(y_predict)
-                print("We have predict the oppose task is :", activity_A[self.predict])
-                # self.strategy=random.randint(0,len(activity_C)-1) 
+                message="We have predict the oppose task is :"+str(activity_A[self.predict])+'\n'
+                self.model.text+=message
+                print(self.model.text)
+                # print("We have predict the oppose task is :", activity_A[self.predict])
                 # 'guohang','dijin','zhencha','yanxi','xunlian'/'ignore','ganrao','quzhu'
                 self.strategy=0 if self.predict==0 else 1 if (self.predict==1 or self.predict==2) else 2
-                print("C takes the strategy of ",activity_C[self.strategy])
+                message="And China takes the strategy of "+str(activity_C[self.strategy])+'\n'
+                self.model.text+=message
+                print(self.model.text)
+                # print("C takes the strategy of ",activity_C[self.strategy])
                 if self.strategy!=0:
-                    arrangement=self.subordinate[0].deploy(self.urgency,activity_C[self.strategy])
-                    print(arrangement)            
+                    self.arrangement=self.subordinate[0].deploy(self.urgency,activity_C[self.strategy])
+                    print(self.arrangement)            
             self.urgency=None
 
         elif self.standpoint==1 and self.urgency==None:

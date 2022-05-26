@@ -1,4 +1,5 @@
 from unicodedata import category
+from click import command
 from mesa import Model
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
@@ -9,12 +10,20 @@ from data_tools.cal_distance import *
 import networkx as nx
 from keras import models
 
+activity_A=['guohang','dijin','zhencha','yanxi','xunlian']
+activity_C=['ignore','ganrao','quzhu']
 class Environment(Model):
-    def __init__(self, graph, arg):
+    def __init__(self, graph, arg, cnn_model, Q_score, Q_times):
         
         self.graph=graph
         self.arg=arg
-        self.cnn_model=models.load_model('ABM_model.h5')
+        self.cnn_model=cnn_model
+        self.Q_score=Q_score
+        self.Q_time=Q_times
+        self.message=pd.DataFrame({'timestamp':[],'message':[]})
+        self.text=""
+        # self.message.loc[len(self.message.index)]=[datetime.now().strftime("%Y-%m-%d %H:%M:%S"),""]
+
 
         self.commander=dict()
         self.description="This is a ABM1.0 demo with 100 training dataset."
@@ -61,12 +70,10 @@ class Environment(Model):
                     if agent.standpoint==-self.graph.nodes.data()[i]['standpoint']:
                         self.commander[self.graph.nodes.data()[i]['standpoint']].warning(i)
             # 当节点出现双方阵营时，判断各自的行为是否成功
-            # if len(self.graph.nodes.data()[i]['agent_list'][1])>0:
-                # print("node",i,"has conflict")
-                # # print(len(self.graph.nodes.data()[i]['agent_list'][-1]),len(self.graph.nodes.data()[i]['agent_list'][1]))
             if 0<len(self.graph.nodes.data()[i]['agent_list'][-1])<=len(self.graph.nodes.data()[i]['agent_list'][1]):
+                # print("have detect the situation",self.commander[1].recording)
                 for agent in self.graph.nodes.data()[i]['agent_list'][-1]:
-                    print(agent.category,"has been warned")
+                    # print(agent.category,"has been warned")
                     agent.warning=True
                     # 这段有问题 一直不能示警 另外还要添加受干扰的标准
             elif 0>len(self.graph.nodes.data()[i]['agent_list'][-1]):
@@ -86,21 +93,84 @@ class Environment(Model):
     def activity(self,model):
         return model.commander[-1].activity
 
+# 参数可改
+agent_cost={'Carrier':10, 'Warship':4, 'Aircraft':1}
+activity_cost={'guohang':1,'dijin':4,'zhencha':4,'yanxi':10,'xunlian':20}
+def cal_Q(Q_score,Q_times,A_activity,C_predict,C_arrangement,A_result):
+    agent_list=list(agent_cost.keys())
+    score=-activity_cost[A_activity] if A_result else 0
+    for i in range(len(C_arrangement)):
+        for _ in range(C_arrangement[i]):
+            score-=agent_cost[agent_list[i]]
+
+    columns=list(Q_score.columns)
+    values=[i for i in C_arrangement]
+    values.insert(0,C_predict)
+    # print(columns,values)
+    Q=''
+    Q+=columns[0]+'=='+'\"'+values[0]+'\"'+' & '
+    for i in range(1,len(columns)-1):
+        Q+=columns[i]+'=='+str(values[i])+' & '
+    Q=Q[:-3]
+    # print(Q)
+
+    index=Q_score.query(Q).index[0]
+    # print(Q_score.iloc[index]['score'],Q_times.iloc[index]['times'])
+    Q_score.iat[index,4]=0 if Q_score.iat[index,4]==-float('inf') else Q_score.iat[index,4]
+    Q_times.iat[index,4]=0 if Q_times.iat[index,4]==-float('inf') else Q_times.iat[index,4]
+    Q_score.iat[index,4]=(Q_score.iat[index,4]*Q_times.iat[index,4]+score)/(1+Q_times.iat[index,4])
+    Q_times.iat[index,4]+=1
+    return Q_score,Q_times
 
 if __name__=="__main__":
     G=nx.read_gpickle(r"./input/Dongsha_withstandpoint.gpickle")
     with open('./input/agent_setting.json','r',encoding='utf8')as fp:
         arg = json.load(fp)
+
+    # Q_score=pd.DataFrame({'predict':[],'Carrier':[],'Warship':[],'Aircraft':[],'score':[]})
+    # Q_times=pd.DataFrame({'predict':[],'Carrier':[],'Warship':[],'Aircraft':[],'times':[]})
+    # predict=copy.deepcopy(activity_A)
+    # predict.insert(0,'undetected')
+    # Cartesian=[predict,range(3),range(5),range(5)]
+    # # print(Cartesian)
+    # values=[d for d in itertools.product(*Cartesian)]
+    # for v in values:
+    #     value=[i for i in v]
+    #     # print(value,type(value))
+    #     value.append(-float('inf'))
+    #     Q_score.loc[len(Q_score.index)]=value
+    #     Q_times.loc[len(Q_times.index)]=value
+    
+    cnn_model=models.load_model('ABM_model.h5')
+    Q_score=pd.read_csv('Q_score.csv')
+    Q_times=pd.read_csv('Q_times.csv')
+
     for i in range(1):
-        test=Environment(G, arg)
+        print(i)
+        test=Environment(G, arg, cnn_model, Q_score, Q_times)
         for j in range(90):
-            print("round",j)
+            # print("round",j)
             test.step()
-        # 结束后通过score_1-score_-1得到我方行动的结果
-        print(test.commander[1].recording)
-        print(test.commander[-1].activity,test.commander[-1].result)
+            test.message.loc[len(test.message.index)]=[datetime.now().strftime("%Y-%m-%d %H:%M:%S"),test.text]
+            test.text=""
+
+        resultA=test.commander[-1].feedback()
+        resultC=test.commander[1].feedback()
+        # print(activity_A[test.commander[1].predict])
+        # print(resultA[0])
+        # print(activity_A[test.commander[1].predict])
+        # print(test.commander[1].arrangement)
+        # print(resultA[1])
+        Q_score,Q_times=cal_Q(Q_score,Q_times,resultA[0],resultC,test.commander[1].arrangement,resultA[1])
+
         agent_data=test.datacollector.get_agent_vars_dataframe()
         model_data=test.datacollector.get_model_vars_dataframe()
-        # print(agent_data)
-        agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)
-        model_data.to_csv('./dete_recorder/{}{}.csv'.format(str(test.commander[-1].activity),i),index=False)
+        agent_data.to_csv('./trace{}.csv'.format(str(i)),index=False)
+        model_data.to_csv('./{}{}.csv'.format(str(test.commander[-1].activity),i),index=False)
+        test.message.to_csv('text.csv',index=False)
+        # agent_data.to_csv('./simu_recorder/trace{}.csv'.format(str(i)),index=False)
+        # model_data.to_csv('./dete_recorder/{}{}.csv'.format(str(test.commander[-1].activity),i),index=False)        
+
+    
+    Q_score.to_csv('Q_score.csv',index=False)
+    Q_times.to_csv('Q_times.csv',index=False)
